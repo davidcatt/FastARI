@@ -61,7 +61,64 @@ int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, siz
 	*olen = opos;
 	return 0;
 }
-int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t olen) {
+int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen) {
+	unsigned int low = 0, mid, high = 0xFFFFFFFF, cur = 0, c;
+	size_t opos = 0;
+	int bp, bv;
+	int ctx;
+	const unsigned char* ibuf_end = ibuf + ilen;
+	/* Initialize model */
+	unsigned short* mdl = malloc((mask + 1) * sizeof(unsigned short));
+	if(!mdl) return 1;
+	for(ctx = 0; ctx <= mask; ++ctx) mdl[ctx] = 0x8000;
+	ctx = 0;
+	/* Initialize coder */
+	cur = (cur << 8) | *ibuf; ++ibuf;
+	cur = (cur << 8) | *ibuf; ++ibuf;
+	cur = (cur << 8) | *ibuf; ++ibuf;
+	cur = (cur << 8) | *ibuf; ++ibuf;
+	/* Walk through input */
+	while(opos < *olen) {
+		bv = 0;
+		for(bp = 0; bp < 8; ++bp) {
+			/* Decode bit */
+			mid = low + (((high - low) >> 16) * mdl[ctx]);
+			if(cur <= mid) {
+				high = mid;
+				mdl[ctx] += (0xFFFF - mdl[ctx]) >> ADAPT;
+				bv |= (1 << bp);
+				ctx = ((ctx << 1) | 1) & mask;
+			} else {
+				low = mid + 1;
+				mdl[ctx] -= mdl[ctx] >> ADAPT;
+				ctx = (ctx << 1) & mask;
+			}
+			while((high ^ low) < 0x1000000) {
+				if(ibuf > ibuf_end) {
+					free(mdl);
+					*olen = opos;
+					return 0;
+				}
+				high = (high << 8) | 0xFF;
+				low <<= 8;
+				c = *ibuf; ++ibuf;
+				cur = (cur << 8) | c;
+			}
+		}
+		*obuf = bv;
+		++obuf;
+		++opos;
+	}
+	/* Cleanup */
+	free(mdl);
+	if(ibuf_end == ibuf) {
+		*olen = opos;
+		return 0;
+	} else {
+		return 2;
+	}
+}
+int fa_decompress_unsafe(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen) {
 	unsigned int low = 0, mid, high = 0xFFFFFFFF, cur = 0, c;
 	size_t opos = 0;
 	int bp, bv;
@@ -77,12 +134,12 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	/* Walk through input */
-	while(olen) {
+	while(*olen) {
 		bv = 0;
 		for(bp = 0; bp < 8; ++bp) {
 			/* Decode bit */
 			mid = low + (((high - low) >> 16) * mdl[ctx]);
-			if(cur <= mid) {
+			if (cur <= mid) {
 				high = mid;
 				mdl[ctx] += (0xFFFF - mdl[ctx]) >> ADAPT;
 				bv |= (1 << bp);
@@ -101,7 +158,7 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 		}
 		*obuf = bv;
 		++obuf;
-		--olen;
+		--(*olen);
 	}
 	/* Cleanup */
 	free(mdl);
