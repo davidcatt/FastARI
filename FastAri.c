@@ -94,15 +94,15 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 				ctx = (ctx << 1) & mask;
 			}
 			while((high ^ low) < 0x1000000) {
-				if(ibuf > ibuf_end) {
+				high = (high << 8) | 0xFF;
+				low <<= 8;
+				c = *ibuf;
+				cur = (cur << 8) | c;
+				if(++ibuf >= ibuf_end) {
 					free(mdl);
 					*olen = opos;
 					return 0;
 				}
-				high = (high << 8) | 0xFF;
-				low <<= 8;
-				c = *ibuf; ++ibuf;
-				cur = (cur << 8) | c;
 			}
 		}
 		*obuf = bv;
@@ -120,7 +120,7 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 }
 int fa_decompress_unsafe(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen) {
 	unsigned int low = 0, mid, high = 0xFFFFFFFF, cur = 0, c;
-	size_t opos = 0;
+	size_t opos = 0, len = *olen;
 	int bp, bv;
 	int ctx;
 	/* Initialize model */
@@ -134,7 +134,7 @@ int fa_decompress_unsafe(const unsigned char* ibuf, unsigned char* obuf, size_t 
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	/* Walk through input */
-	while(*olen) {
+	while(len) {
 		bv = 0;
 		for(bp = 0; bp < 8; ++bp) {
 			/* Decode bit */
@@ -158,7 +158,7 @@ int fa_decompress_unsafe(const unsigned char* ibuf, unsigned char* obuf, size_t 
 		}
 		*obuf = bv;
 		++obuf;
-		--(*olen);
+		--len;
 	}
 	/* Cleanup */
 	free(mdl);

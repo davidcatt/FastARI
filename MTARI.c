@@ -33,7 +33,7 @@ int enc_blk(char* bin, char* bout, size_t ilen, size_t* olen, int par) {
 	return !fa_compress(bin, bout, ilen, olen);
 }
 int dec_blk(char* bin, char* bout, size_t ilen, size_t* olen) {
-	return !fa_decompress(bin, bout, ilen, olen);
+	return !fa_decompress_unsafe(bin, bout, ilen, olen);
 }
 /* ======================================= */
 
