@@ -65,10 +65,10 @@ int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, siz
 		}
 	}
 	/* Flush coder */
-	obuf[opos] = (high >> 24); ++opos;
-	obuf[opos] = (high >> 16) & 0xFF; ++opos;
-	obuf[opos] = (high >> 8) & 0xFF; ++opos;
-	obuf[opos] = high & 0xFF; ++opos;
+	obuf[opos] = (low >> 24); ++opos;
+	obuf[opos] = (low >> 16) & 0xFF; ++opos;
+	obuf[opos] = (low >> 8) & 0xFF; ++opos;
+	obuf[opos] = low & 0xFF; ++opos;
 #ifdef FA_USE_EOF
 	obuf[opos] = 0; ++opos;
 #endif
@@ -100,12 +100,17 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 #ifdef FA_UNSAFE_DECODE
 	while(len) {
 #else
-	while(opos < *olen) {
+	while(1) {
 #endif
 #ifdef FA_USE_EOF
-		if (cur <= low) break;
+		if(cur <= low) {
+			free(mdl);
+			*olen = opos;
+			return 0;
+		}
 		++low;
 #endif
+		if(opos >= *olen) break;
 		bv = 0;
 		for(bp = 0; bp < 8; ++bp) {
 			/* Decode bit */
@@ -151,7 +156,7 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 		*olen = opos;
 		return 0;
 	} else {
-		return 0; /*2;*/
+		return 2;
 	}
 #endif
 }
