@@ -211,6 +211,7 @@ int fae_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, si
 	obuf[opos] = (high >> 16) & 0xFF; ++opos;
 	obuf[opos] = (high >> 8) & 0xFF; ++opos;
 	obuf[opos] = high & 0xFF; ++opos;
+	obuf[opos] = 0; ++opos;
 	/* Cleanup */
 	free(mdl);
 	*olen = opos;
@@ -234,7 +235,7 @@ int fae_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, 
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	/* Walk through input */
 	while(opos < *olen) {
-		if(cur < low) break;
+		if(cur <= low) break;
 		++low;
 		bv = 0;
 		for(bp = 0; bp < 8; ++bp) {
@@ -293,7 +294,7 @@ int fae_decompress_unsafe(const unsigned char* ibuf, unsigned char* obuf, size_t
 	cur = (cur << 8) | *ibuf; ++ibuf;
 	/* Walk through input */
 	while(len) {
-		if(cur < low) break;
+		if(cur <= low) break;
 		++low;
 		bv = 0;
 		for(bp = 0; bp < 8; ++bp) {
