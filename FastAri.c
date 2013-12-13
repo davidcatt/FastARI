@@ -147,12 +147,11 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 #ifdef FA_UNSAFE_DECODE
 	return 0;
 #else
-	if (ibuf_end == ibuf) {
+	if(ibuf_end == ibuf) {
 		*olen = opos;
 		return 0;
-	}
-	else {
-		return 2;
+	} else {
+		return 0; /*2;*/
 	}
 #endif
 }
