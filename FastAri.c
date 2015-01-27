@@ -22,7 +22,7 @@ int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, siz
 #ifdef FA_USE_EOF
 		/* Encode not EOF */
 		++low;
-		while ((high ^ low) < 0x1000000) {
+		if((high ^ low) < 0x1000000) {
 			obuf[opos] = high >> 24;
 			++opos;
 			high = (high << 8) | 255;
@@ -96,6 +96,19 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 			return 0;
 		}
 		++low;
+		if((high ^ low) < 0x1000000) {
+			high = (high << 8) | 0xFF;
+			low <<= 8;
+			c = *ibuf; ++ibuf;
+			cur = (cur << 8) | c;
+#ifndef FA_UNSAFE_DECODE
+			if(ibuf >= ibuf_end) {
+				free(mdl);
+				*olen = opos;
+				return 0;
+			}
+#endif
+		}
 #endif
 		if(opos >= *olen) break;
 		bv = 0;
