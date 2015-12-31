@@ -52,9 +52,9 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	size_t* olens;
 	int mp, pi, rc;
 	/* Validate parameters */
-	if(!fin) return 0;
-	if(!fout) return 0;
-	if(bsz < 1) return 0;
+	if(!fin) return EXIT_FAILURE;
+	if(!fout) return EXIT_FAILURE;
+	if(bsz < 1) return EXIT_FAILURE;
 	/* Setup thread count */
 	if(tcnt < 1) {
 #ifdef _OPENMP
@@ -70,10 +70,10 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	tcnt = 1;
 #endif
 	/* Allocate arrays */
-	if(!(ibufs = calloc(tcnt, sizeof(char*)))) return 0;
-	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return 0; }
-	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return 0; }
-	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return 0; }
+	if(!(ibufs = calloc(tcnt, sizeof(char*)))) return EXIT_FAILURE;
+	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return EXIT_FAILURE; }
+	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return EXIT_FAILURE; }
+	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return EXIT_FAILURE; }
 	/* Allocate buffers */
 	for(pi = 0; pi < tcnt; ++pi) {
 		if(!(ibufs[pi] = malloc(bsz * sizeof(char))) || !(obufs[pi] = malloc(((bsz + (bsz / 10)) * sizeof(char)) + 1024))) {
@@ -83,7 +83,7 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 			free(obufs);
 			free(ilens);
 			free(olens);
-			return 0;
+			return EXIT_FAILURE;
 		}
 	}
 	/* Process input */
@@ -108,7 +108,7 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 			free(obufs);
 			free(ilens);
 			free(olens);
-			return 0;
+			return EXIT_FAILURE;
 		}
 		/* Write output */
 		for(pi = 0; pi < mp; ++pi) {
@@ -128,7 +128,7 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	free(ilens);
 	free(olens);
 	/* Return success */
-	return 1;
+	return EXIT_SUCCESS;
 }
 int decode(FILE* fin, FILE* fout, int tcnt) {
 	/* Declare variables */
@@ -138,8 +138,8 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	size_t* olens;
 	int mp, pi, rc, es = 0;
 	/* Validate parameters */
-	if(!fin) return 0;
-	if(!fout) return 0;
+	if(!fin) return EXIT_FAILURE;
+	if(!fout) return EXIT_FAILURE;
 	/* Setup thread count */
 	if(tcnt < 1) {
 #ifdef _OPENMP
@@ -155,10 +155,10 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	tcnt = 1;
 #endif
 	/* Allocate arrays */
-	if(!(ibufs = calloc(tcnt, sizeof(char*)))) return 0;
-	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return 0; }
-	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return 0; }
-	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return 0; }
+	if(!(ibufs = calloc(tcnt, sizeof(char*)))) return EXIT_FAILURE;
+	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return EXIT_FAILURE; }
+	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return EXIT_FAILURE; }
+	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return EXIT_FAILURE; }
 	/* Process input */
 	while(1) {
 		/* Read input */
@@ -177,7 +177,7 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 			free(obufs);
 			free(ilens);
 			free(olens);
-			return 0;
+			return EXIT_FAILURE;
 		}
 		/* Process input */
 #pragma omp parallel for
@@ -193,7 +193,7 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 			free(obufs);
 			free(ilens);
 			free(olens);
-			return 0;
+			return EXIT_FAILURE;
 		}
 		/* Write output */
 		rc = 0;
@@ -212,7 +212,7 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	free(ilens);
 	free(olens);
 	/* Return success */
-	return 1;
+	return EXIT_SUCCESS;
 }
 /* ======================================= */
 
@@ -223,7 +223,7 @@ int main(int argc, char** argv) {
 		if(argv[1][0] == 'c') {
 			if(argc == 5) tcnt = atoi(argv[4]);
 			if(strcmp(argv[2], ":")) {
-				if(!(fin = fopen(argv[2], "rb"))) { fprintf(stderr, "ERROR: Could not open input file.\n"); return 1; }
+				if(!(fin = fopen(argv[2], "rb"))) { fprintf(stderr, "ERROR: Could not open input file.\n"); return EXIT_FAILURE; }
 			} else {
 #ifdef _WIN32
 				_setmode(_fileno(stdin), O_BINARY);
@@ -233,7 +233,7 @@ int main(int argc, char** argv) {
 #endif
 			}
 			if(strcmp(argv[3], ":")) {
-				if(!(fout = fopen(argv[3], "wb"))) { fclose(fin); fprintf(stderr, "ERROR: Could not open output file.\n"); return 1; }
+				if(!(fout = fopen(argv[3], "wb"))) { fclose(fin); fprintf(stderr, "ERROR: Could not open output file.\n"); return EXIT_FAILURE; }
 			} else {
 #ifdef _WIN32
 				_setmode(_fileno(stdout), O_BINARY);
@@ -246,12 +246,12 @@ int main(int argc, char** argv) {
 			fflush(fout);
 			fclose(fin);
 			fclose(fout);
-			if(!rc) fprintf(stderr, "ERROR: Compress failed.\n");
+			if(rc != EXIT_SUCCESS) fprintf(stderr, "ERROR: Compress failed.\n");
 			return rc;
 		} else if(argv[1][0] == 'd') {
 			if(argc == 5) tcnt = atoi(argv[4]);
 			if(strcmp(argv[2], ":")) {
-				if(!(fin = fopen(argv[2], "rb"))) { fprintf(stderr, "ERROR: Could not open input file.\n"); return 1; }
+				if(!(fin = fopen(argv[2], "rb"))) { fprintf(stderr, "ERROR: Could not open input file.\n"); return EXIT_FAILURE; }
 			} else {
 #ifdef _WIN32
 				_setmode(_fileno(stdin), O_BINARY);
@@ -261,7 +261,7 @@ int main(int argc, char** argv) {
 #endif
 			}
 			if(strcmp(argv[3], ":")) {
-				if(!(fout = fopen(argv[3], "wb"))) { fclose(fin); fprintf(stderr, "ERROR: Could not open output file.\n"); return 1; }
+				if(!(fout = fopen(argv[3], "wb"))) { fclose(fin); fprintf(stderr, "ERROR: Could not open output file.\n"); return EXIT_FAILURE; }
 			} else {
 #ifdef _WIN32
 				_setmode(_fileno(stdout), O_BINARY);
@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
 			fflush(fout);
 			fclose(fin);
 			fclose(fout);
-			if(!rc) fprintf(stderr, "ERROR: Decompress failed.\n");
+			if(rc != EXIT_SUCCESS) fprintf(stderr, "ERROR: Decompress failed.\n");
 			return rc;
 		}
 	} else {
@@ -284,6 +284,6 @@ int main(int argc, char** argv) {
 		printf("  c  - Compress infile to outfile\n");
 		printf("  d  - Decompress infile to outfile\n\n");
 		printf("note: If the number of threads is not specified, uses all cores\n");
-		return 1;
+		return EXIT_FAILURE;
 	}
 }
