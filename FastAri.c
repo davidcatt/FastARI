@@ -7,13 +7,13 @@ Copyright (C) 2013  David Catt */
 #define ORDER 17
 #define ADAPT 4
 const int mask = (1 << ORDER) - 1;
-int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen) {
+int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen, void* workmem) {
 	unsigned int low=0, mid, high=0xFFFFFFFF;
 	size_t ipos, opos=0;
 	int bp, bv;
 	int ctx;
 	/* Initialize model */
-	unsigned short* mdl = malloc((mask + 1) * sizeof(unsigned short));
+	unsigned short* mdl = workmem;
 	if(!mdl) return 1;
 	for(ctx = 0; ctx <= mask; ++ctx) mdl[ctx] = 0x8000;
 	ctx = 0;
@@ -60,11 +60,10 @@ int fa_compress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, siz
 	obuf[opos] = 0; ++opos;
 #endif
 	/* Cleanup */
-	free(mdl);
 	*olen = opos;
 	return 0;
 }
-int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen) {
+int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, size_t* olen, void* workmem) {
 	unsigned int low = 0, mid, high = 0xFFFFFFFF, cur = 0, c;
 	size_t opos = 0;
 #ifdef FA_UNSAFE_DECODE
@@ -74,7 +73,7 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 	int ctx;
 	const unsigned char* ibuf_end = ibuf + ilen;
 	/* Initialize model */
-	unsigned short* mdl = malloc((mask + 1) * sizeof(unsigned short));
+	unsigned short* mdl = workmem;
 	if(!mdl) return 1;
 	for(ctx = 0; ctx <= mask; ++ctx) mdl[ctx] = 0x8000;
 	ctx = 0;
@@ -91,7 +90,6 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 #endif
 #ifdef FA_USE_EOF
 		if(cur <= low) {
-			free(mdl);
 			*olen = opos;
 			return 0;
 		}
@@ -103,7 +101,6 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 			cur = (cur << 8) | c;
 #ifndef FA_UNSAFE_DECODE
 			if(ibuf >= ibuf_end) {
-				free(mdl);
 				*olen = opos;
 				return 0;
 			}
@@ -132,7 +129,6 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 				cur = (cur << 8) | c;
 #ifndef FA_UNSAFE_DECODE
 				if(ibuf >= ibuf_end) {
-					free(mdl);
 					*olen = opos;
 					return 0;
 				}
@@ -148,7 +144,6 @@ int fa_decompress(const unsigned char* ibuf, unsigned char* obuf, size_t ilen, s
 #endif
 	}
 	/* Cleanup */
-	free(mdl);
 #ifdef FA_UNSAFE_DECODE
 	return 0;
 #else

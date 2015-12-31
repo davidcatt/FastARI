@@ -16,11 +16,11 @@ Copyright (C) 2013  David Catt */
 #include "FastAri.h"
 
 /* ============BLOCK FUNCTIONS============ */
-int enc_blk(char* bin, char* bout, size_t ilen, size_t* olen, int par) {
-	return !fa_compress(bin, bout, ilen, olen);
+int enc_blk(char* bin, char* bout, size_t ilen, size_t* olen, int par, void* workmem) {
+	return !fa_compress(bin, bout, ilen, olen, workmem);
 }
-int dec_blk(char* bin, char* bout, size_t ilen, size_t* olen) {
-	return !fa_decompress(bin, bout, ilen, olen);
+int dec_blk(char* bin, char* bout, size_t ilen, size_t* olen, void* workmem) {
+	return !fa_decompress(bin, bout, ilen, olen, workmem);
 }
 /* ======================================= */
 
@@ -51,6 +51,7 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	size_t* ilens;
 	size_t* olens;
 	int mp, pi, rc;
+	void** wbufs;
 	/* Validate parameters */
 	if(!fin) return EXIT_FAILURE;
 	if(!fout) return EXIT_FAILURE;
@@ -74,15 +75,18 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return EXIT_FAILURE; }
 	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return EXIT_FAILURE; }
 	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return EXIT_FAILURE; }
+	if(!(wbufs = calloc(tcnt, sizeof(void*)))) { free(ibufs); free(obufs); free(ilens); free(olens); return EXIT_FAILURE; }
 	/* Allocate buffers */
 	for(pi = 0; pi < tcnt; ++pi) {
-		if(!(ibufs[pi] = malloc(bsz * sizeof(char))) || !(obufs[pi] = malloc(((bsz + (bsz / 10)) * sizeof(char)) + 1024))) {
+		if(!(ibufs[pi] = malloc(bsz * sizeof(char))) || !(obufs[pi] = malloc(((bsz + (bsz / 10)) * sizeof(char)) + 1024)) || !(wbufs[pi] = malloc(FA_WORKMEM))) {
 			if (ibufs[pi]) free(ibufs[pi]);
-			for (mp = 0; mp < pi; ++mp) { free(ibufs[mp]); free(obufs[mp]); }
+			if (obufs[pi]) free(obufs[pi]);
+			for (mp = 0; mp < pi; ++mp) { free(ibufs[mp]); free(obufs[mp]); free(wbufs[mp]); }
 			free(ibufs);
 			free(obufs);
 			free(ilens);
 			free(olens);
+			free(wbufs);
 			return EXIT_FAILURE;
 		}
 	}
@@ -98,16 +102,17 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 #pragma omp parallel for
 		for(pi = 0; pi < mp; ++pi) {
 			if(ilens[pi] > 0) {
-				rc += !enc_blk(ibufs[pi], obufs[pi], ilens[pi], &(olens[pi]), par);
+				rc += !enc_blk(ibufs[pi], obufs[pi], ilens[pi], &(olens[pi]), par, wbufs[pi]);
 			}
 		}
 		/* Check for processing errors */
 		if(rc) {
-			for (pi = 0; pi < tcnt; ++pi) { free(ibufs[pi]); free(obufs[pi]); }
+			for (pi = 0; pi < tcnt; ++pi) { free(ibufs[pi]); free(obufs[pi]); free(wbufs[pi]); }
 			free(ibufs);
 			free(obufs);
 			free(ilens);
 			free(olens);
+			free(wbufs);
 			return EXIT_FAILURE;
 		}
 		/* Write output */
@@ -122,11 +127,12 @@ int encode(FILE* fin, FILE* fout, int tcnt, size_t bsz, int par) {
 	fwritesize(0, fout);
 	fflush(fout);
 	/* Free memory */
-	for (pi = 0; pi < tcnt; ++pi) { free(ibufs[pi]); free(obufs[pi]); }
+	for (pi = 0; pi < tcnt; ++pi) { free(ibufs[pi]); free(obufs[pi]); free(wbufs[pi]); }
 	free(ibufs);
 	free(obufs);
 	free(ilens);
 	free(olens);
+	free(wbufs);
 	/* Return success */
 	return EXIT_SUCCESS;
 }
@@ -136,6 +142,7 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	char** obufs;
 	size_t* ilens;
 	size_t* olens;
+	void** wbufs;
 	int mp, pi, rc, es = 0;
 	/* Validate parameters */
 	if(!fin) return EXIT_FAILURE;
@@ -159,6 +166,19 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	if(!(obufs = calloc(tcnt, sizeof(char*)))) { free(ibufs); return EXIT_FAILURE; }
 	if(!(ilens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); return EXIT_FAILURE; }
 	if(!(olens = calloc(tcnt, sizeof(size_t)))) { free(ibufs); free(obufs); free(ilens); return EXIT_FAILURE; }
+	if(!(wbufs = calloc(tcnt, sizeof(void*)))) { free(ibufs); free(obufs); free(ilens); free(olens); return EXIT_FAILURE; }
+	/* Allocate work memory */
+	for(pi = 0; pi < tcnt; ++pi) {
+		if(!(wbufs[pi] = malloc(FA_WORKMEM))) {
+			for (mp = 0; mp < pi; ++mp) { free(wbufs[mp]); }
+			free(ibufs);
+			free(obufs);
+			free(ilens);
+			free(olens);
+			free(wbufs);
+			return EXIT_FAILURE;
+		}
+	}
 	/* Process input */
 	while(1) {
 		/* Read input */
@@ -172,27 +192,29 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 			if(fread(ibufs[mp], sizeof(char), ilens[mp], fin) < ilens[mp]) { free(ibufs[mp]); free(obufs[mp]); rc = 1; break; }
 		}
 		if(rc) {
-			for(pi = 0; pi < mp; ++pi) { free(ibufs[pi]); free(obufs[pi]); }
+			for(pi = 0; pi < mp; ++pi) { free(ibufs[pi]); free(obufs[pi]); free(wbufs[pi]); }
 			free(ibufs);
 			free(obufs);
 			free(ilens);
 			free(olens);
+			free(wbufs);
 			return EXIT_FAILURE;
 		}
 		/* Process input */
 #pragma omp parallel for
 		for(pi = 0; pi < mp; ++pi) {
 			if(ilens[pi] > 0) {
-				rc += !dec_blk(ibufs[pi], obufs[pi], ilens[pi], &(olens[pi]));
+				rc += !dec_blk(ibufs[pi], obufs[pi], ilens[pi], &(olens[pi]), wbufs[pi]);
 			}
 		}
 		/* Check for processing errors */
 		if(rc) {
-			for(pi = 0; pi < mp; ++pi) { free(ibufs[pi]); free(obufs[pi]); }
+			for(pi = 0; pi < mp; ++pi) { free(ibufs[pi]); free(obufs[pi]); free(wbufs[pi]); }
 			free(ibufs);
 			free(obufs);
 			free(ilens);
 			free(olens);
+			free(wbufs);
 			return EXIT_FAILURE;
 		}
 		/* Write output */
@@ -211,6 +233,8 @@ int decode(FILE* fin, FILE* fout, int tcnt) {
 	free(obufs);
 	free(ilens);
 	free(olens);
+	for(pi = 0; pi < tcnt; ++pi) { free(wbufs[pi]); }
+	free(wbufs);
 	/* Return success */
 	return EXIT_SUCCESS;
 }
